@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Прывiтанне!! - Мессенджер</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f2f5;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .messenger {
+            width: 800px;
+            height: 700px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .top-panel {
+            padding: 10px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .top-panel button {
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            background: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .top-panel button:hover {
+            background: #e9ecef;
+            border-color: #adb5bd;
+        }
+
+        .notify-btn {
+            padding: 6px 12px;
+            border: 1px solid #28a745;
+            background: #d4edda !important;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            background: #fff;
+        }
+
+        .message {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            max-width: 70%;
+            word-wrap: break-word;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .system-msg {
+            text-align: center;
+            color: #6c757d;
+            font-size: 0.9em;
+            font-style: italic;
+            max-width: 100%;
+            background: #f8f9fa;
+        }
+
+        .my-message {
+            margin-left: auto;
+            background: #007bff;
+            color: white;
+        }
+
+        .other-message {
+            margin-right: auto;
+            background: #e9ecef;
+            color: #212529;
+        }
+
+        .file-message {
+            margin-right: auto;
+            background: #e9ecef;
+            color: #212529;
+        }
+
+        .file-message button {
+            margin-top: 5px;
+            padding: 4px 10px;
+            border: 1px solid #007bff;
+            background: white;
+            color: #007bff;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .file-message button:hover {
+            background: #007bff;
+            color: white;
+        }
+
+        .file-message a {
+            display: inline-block;
+            margin: 5px 5px 0 0;
+        }
+
+        .message-time {
+            font-size: 0.7em;
+            opacity: 0.7;
+            margin-bottom: 3px;
+        }
+
+        .input-area {
+            padding: 15px;
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .input-area button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .input-area button:hover {
+            background: #0056b3;
+        }
+
+        .status-bar {
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+            color: #6c757d;
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .search-results {
+            padding: 10px;
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            margin: 10px;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #333;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            animation: slideIn 0.5s;
+            z-index: 1000;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="messenger" id="messenger">
+        <!-- Блок логина -->
+        <div id="login-block" style="padding: 50px; text-align: center;">
+            <h2>Прывiтанне!!</h2>
+            <p>Введите ваше имя, чтобы войти в чат</p>
+            <input type="text" id="username-input" placeholder="Ваше имя" style="padding: 10px; margin: 20px 0; width: 300px; font-size: 16px;">
+            <br>
+            <button onclick="login()" style="padding: 10px 30px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;">
+                Войти в чат
+            </button>
+        </div>
+
+        <!-- Основной интерфейс -->
+        <div id="chat-block" class="hidden" style="display: flex; flex-direction: column; height: 100%;">
+            <div class="top-panel" id="top-panel">
+                <button onclick="saveHistory()">💾 Сохранить</button>
+                <button onclick="loadHistory()">📂 Загрузить</button>
+                <button onclick="clearChat()">🗑 Очистить</button>
+                <button onclick="searchMessages()">🔍 Поиск</button>
+                <button onclick="createBackup()">💽 Бэкап</button>
+                <button onclick="restoreBackup()">🔄 Восст.</button>
+                <button onclick="document.getElementById('file-input').click()">📎 Файл</button>
+                <input type="file" id="file-input" class="hidden" onchange="sendFile(this)">
+                <button id="notify-btn" class="notify-btn" onclick="toggleNotifications()">🔔 Увед. ВКЛ</button>
+            </div>
+
+            <div class="chat-container" id="chat-display"></div>
+
+            <div class="input-area">
+                <input type="text" id="message-input" placeholder="Введите сообщение..." onkeypress="handleEnter(event)">
+                <button onclick="sendMessage()">Отправить</button>
+            </div>
+
+            <div class="status-bar" id="status-bar">Подключение...</div>
+        </div>
+    </div>
+
+    <script>
+        // Конфигурация
+        const CHAT_ROOM = "my_secret_chat_room_2024";
+        const BROKER_URL = "wss://broker.emqx.io:8084/mqtt";
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+        // Состояние
+        let username = null;
+        let client = null;
+        let notificationsEnabled = true;
+        let lastNotificationTime = 0;
+        let messageHistory = [];
+
+        // Инициализация IndexedDB для хранения истории
+        const dbName = 'ChatHistoryDB';
+        let db = null;
+
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(dbName, 1);
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('messages')) {
+                        db.createObjectStore('messages', { keyPath: 'id', autoIncrement: true });
+                    }
+                    if (!db.objectStoreNames.contains('backups')) {
+                        db.createObjectStore('backups', { keyPath: 'id', autoIncrement: true });
+                    }
+                };
+
+                request.onsuccess = (event) => {
+                    db = event.target.result;
+                    resolve(db);
+                };
+
+                request.onerror = (event) => {
+                    console.error('Database error:', event.target.error);
+                    reject(event.target.error);
+                };
+            });
+        }
+
+        function saveMessageToDB(message) {
+            if (!db) return;
+            const transaction = db.transaction(['messages'], 'readwrite');
+            const store = transaction.objectStore('messages');
+            store.add({
+                ...message,
+                timestamp: message.timestamp || Date.now()
+            });
+        }
+
+        function getMessagesFromDB(limit = 50) {
+            return new Promise((resolve, reject) => {
+                if (!db) {
+                    resolve([]);
+                    return;
+                }
+                const transaction = db.transaction(['messages'], 'readonly');
+                const store = transaction.objectStore('messages');
+                const request = store.getAll();
+
+                request.onsuccess = () => {
+                    const messages = request.result;
+                    const sorted = messages.sort((a, b) => b.timestamp - a.timestamp);
+                    resolve(sorted.slice(0, limit));
+                };
+
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        function getAllMessagesFromDB() {
+            return new Promise((resolve, reject) => {
+                if (!db) {
+                    resolve([]);
+                    return;
+                }
+                const transaction = db.transaction(['messages'], 'readonly');
+                const store = transaction.objectStore('messages');
+                const request = store.getAll();
+
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        // Логин
+        async function login() {
+            const input = document.getElementById('username-input');
+            const name = input.value.trim();
+            
+            if (!name) {
+                alert('Пожалуйста, введите имя');
+                return;
+            }
+
+            username = name;
+            document.getElementById('login-block').classList.add('hidden');
+            document.getElementById('chat-block').style.display = 'flex';
+            document.title = `Мессенджер - ${username}`;
+
+            await initDB();
+            await connectToBroker();
+        }
+
+        // Подключение к MQTT
+        async function connectToBroker() {
+            updateStatus('Подключение...', '#ffc107');
+            
+            try {
+                client = mqtt.connect(BROKER_URL, {
+                    clientId: `web_${username}_${Date.now()}`,
+                    clean: true,
+                    connectTimeout: 4000,
+                    reconnectPeriod: 1000
+                });
+
+                client.on('connect', () => {
+                    updateStatus('Онлайн ✓', '#28a745');
+                    client.subscribe(`chat/${CHAT_ROOM}`, (err) => {
+                        if (!err) {
+                            addSystemMessage(`🌟 ${username} присоединился к чату!`);
+                            sendSystemMessage(`${username} присоединился`);
+                            loadLastMessages();
+                        }
+                    });
+                });
+
+                client.on('message', (topic, message) => {
+                    try {
+                        const data = JSON.parse(message.toString());
+                        handleIncomingMessage(data);
+                    } catch (e) {
+                        console.error('Parse error:', e);
+                    }
+                });
+
+                client.on('error', (err) => {
+                    updateStatus(`Ошибка: ${err.message}`, '#dc3545');
+                });
+
+                client.on('reconnect', () => {
+                    updateStatus('Переподключение...', '#ffc107');
+                });
+
+            } catch (e) {
+                updateStatus(`Не удалось подключиться: ${e.message}`, '#dc3545');
+            }
+        }
+
+        // Обработка входящих сообщений
+        function handleIncomingMessage(data) {
+            const sender = data.sender;
+            const msgType = data.type || 'message';
+            const timestamp = data.timestamp || Date.now();
+
+            // Сохраняем в БД
+            saveMessageToDB(data);
+
+            // Показываем уведомление
+            if (sender !== username && msgType === 'message' && notificationsEnabled) {
+                showNotification(sender, data.message || '');
+            }
+
+            // Отображаем в чате
+            if (sender !== username) {
+                if (msgType === 'system') {
+                    addSystemMessage(`📢 ${data.message}`);
+                } else if (msgType === 'message') {
+                    addOtherMessage(sender, data.message || '', timestamp);
+                } else if (['photo', 'video', 'file'].includes(msgType)) {
+                    addFileMessage(sender, data, timestamp);
+                }
+            }
+        }
+
+        // Отправка текстового сообщения
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+
+            if (!message || !username || !client) return;
+
+            const data = {
+                sender: username,
+                message: message,
+                type: 'message',
+                timestamp: Date.now()
+            };
+
+            client.publish(`chat/${CHAT_ROOM}`, JSON.stringify(data));
+            addMyMessage(message, data.timestamp);
+            saveMessageToDB(data);
+            input.value = '';
+        }
+
+        // Отправка файла
+        function sendFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            if (file.size > MAX_FILE_SIZE) {
+                alert(`Файл слишком большой! Максимум 10MB (ваш: ${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+                input.value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const fileData = e.target.result.split(',')[1]; // base64 без префикса
+                
+                let fileType = 'file';
+                if (file.type.startsWith('image/')) fileType = 'photo';
+                else if (file.type.startsWith('video/')) fileType = 'video';
+
+                const data = {
+                    sender: username,
+                    type: fileType,
+                    file_name: file.name,
+                    file_data: fileData,
+                    file_size: file.size,
+                    timestamp: Date.now()
+                };
+
+                client.publish(`chat/${CHAT_ROOM}`, JSON.stringify(data));
+                saveMessageToDB(data);
+
+                const icon = fileType === 'photo' ? '📷' : fileType === 'video' ? '🎬' : '📎';
+                addMyMessage(`${icon} ${file.name} (${(file.size / 1024).toFixed(1)} KB)`, data.timestamp);
+                
+                updateStatus(`Отправлено: ${file.name}`, '#28a745');
+            };
+            reader.readAsDataURL(file);
+            input.value = '';
+        }
+
+        // Отображение сообщений
+        function addSystemMessage(text) {
+            const display = document.getElementById('chat-display');
+            const div = document.createElement('div');
+            div.className = 'message system-msg';
+            div.textContent = text;
+            display.appendChild(div);
+            scrollToBottom();
+        }
+
+        function addMyMessage(text, timestamp) {
+            const display = document.getElementById('chat-display');
+            const div = document.createElement('div');
+            div.className = 'message my-message';
+            const time = new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            div.innerHTML = `<div class="message-time">${time}</div>${escapeHtml(text)}`;
+            display.appendChild(div);
+            scrollToBottom();
+        }
+
+        function addOtherMessage(sender, text, timestamp) {
+            const display = document.getElementById('chat-display');
+            const div = document.createElement('div');
+            div.className = 'message other-message';
+            const time = new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            div.innerHTML = `<div class="message-time">${time} - ${escapeHtml(sender)}</div>${escapeHtml(text)}`;
+            display.appendChild(div);
+            scrollToBottom();
+        }
+
+        function addFileMessage(sender, data, timestamp) {
+            const display = document.getElementById('chat-display');
+            const div = document.createElement('div');
+            div.className = 'message file-message';
+            
+            const icon = data.type === 'photo' ? '📷' : data.type === 'video' ? '🎬' : '📎';
+            const time = new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            const fileName = data.file_name || 'file';
+            const fileSize = data.file_size ? (data.file_size / 1024).toFixed(1) : '0';
+            
+            div.innerHTML = `
+                <div class="message-time">${time} - ${escapeHtml(sender)}</div>
+                ${icon} ${escapeHtml(fileName)} (${fileSize} KB)
+                <br>
+                <a href="data:application/octet-stream;base64,${data.file_data}" download="${escapeHtml(fileName)}">
+                    <button>💾 Скачать</button>
+                </a>
+            `;
+            
+            display.appendChild(div);
+            scrollToBottom();
+        }
+
+        // Системное сообщение
+        function sendSystemMessage(text) {
+            if (!client) return;
+            const data = {
+                sender: 'system',
+                message: text,
+                type: 'system',
+                timestamp: Date.now()
+            };
+            client.publish(`chat/${CHAT_ROOM}`, JSON.stringify(data));
+        }
+
+        // Загрузка последних сообщений
+        async function loadLastMessages() {
+            const messages = await getMessagesFromDB(50);
+            messages.reverse().forEach(msg => {
+                if (msg.type === 'system') {
+                    addSystemMessage(`📢 ${msg.message}`);
+                } else if (msg.type === 'message') {
+                    if (msg.sender === username) {
+                        addMyMessage(msg.message, msg.timestamp);
+                    } else {
+                        addOtherMessage(msg.sender, msg.message, msg.timestamp);
+                    }
+                } else if (['photo', 'video', 'file'].includes(msg.type)) {
+                    if (msg.sender === username) {
+                        const icon = msg.type === 'photo' ? '📷' : msg.type === 'video' ? '🎬' : '📎';
+                        addMyMessage(`${icon} ${msg.file_name}`, msg.timestamp);
+                    } else {
+                        addFileMessage(msg.sender, msg, msg.timestamp);
+                    }
+                }
+            });
+        }
+
+        // Нотификации
+        function toggleNotifications() {
+            notificationsEnabled = !notificationsEnabled;
+            const btn = document.getElementById('notify-btn');
+            if (notificationsEnabled) {
+                btn.textContent = '🔔 Увед. ВКЛ';
+                btn.style.background = '#d4edda';
+                updateStatus('Уведомления включены', '#28a745');
+            } else {
+                btn.textContent = '🔕 Увед. ВЫКЛ';
+                btn.style.background = '#e9ecef';
+                updateStatus('Уведомления выключены', '#ffc107');
+            }
+        }
+
+        function showNotification(sender, message) {
+            if (Date.now() - lastNotificationTime < 2000) return;
+            lastNotificationTime = Date.now();
+
+            // Браузерные уведомления
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(`📨 ${sender}`, {
+                    body: message.substring(0, 100),
+                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">💬</text></svg>'
+                });
+            }
+
+            // Toast уведомление
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `<strong>📨 ${escapeHtml(sender)}</strong><br>${escapeHtml(message.substring(0, 50))}`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Запрос разрешения на уведомления
+        if ('Notification' in window) {
+            Notification.requestPermission();
+        }
+
+        // Поиск сообщений
+        async function searchMessages() {
+            const query = prompt('Введите текст для поиска:');
+            if (!query) return;
+
+            const messages = await getAllMessagesFromDB();
+            const results = messages.filter(msg => 
+                msg.type === 'message' && 
+                msg.message.toLowerCase().includes(query.toLowerCase())
+            );
+
+            if (results.length === 0) {
+                alert(`Ничего не найдено по запросу: ${query}`);
+                return;
+            }
+
+            const display = document.getElementById('chat-display');
+            display.innerHTML = `
+                <div class="search-results">
+                    <strong>🔍 Найдено сообщений: ${results.length}</strong>
+                    <hr>
+                    ${results.map(msg => `
+                        <div style="margin: 5px 0; padding: 5px; background: white; border-radius: 3px;">
+                            <strong>${escapeHtml(msg.sender)}</strong> 
+                            <small>${new Date(msg.timestamp).toLocaleString('ru-RU')}</small><br>
+                            ${escapeHtml(msg.message)}
+                        </div>
+                    `).join('')}
+                </div>
+                <div style="text-align: center; margin-top: 20px; color: #6c757d;">
+                    Для возврата в чат перезагрузите страницу или отправьте новое сообщение
+                </div>
+            `;
+        }
+
+        // Сохранение истории
+        async function saveHistory() {
+            const filename = prompt('Имя файла для сохранения:', `chat_history_${Date.now()}`);
+            if (!filename) return;
+
+            const messages = await getAllMessagesFromDB();
+            const blob = new Blob([JSON.stringify(messages, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${filename}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            updateStatus(`История сохранена в ${filename}.json`, '#28a745');
+        }
+
+        // Загрузка истории
+        async function loadHistory() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = async function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    try {
+                        const messages = JSON.parse(e.target.result);
+                        
+                        // Очищаем текущую БД
+                        const transaction = db.transaction(['messages'], 'readwrite');
+                        const store = transaction.objectStore('messages');
+                        store.clear();
+                        
+                        // Добавляем новые сообщения
+                        for (const msg of messages) {
+                            await new Promise(resolve => {
+                                const addTransaction = db.transaction(['messages'], 'readwrite');
+                                const addStore = addTransaction.objectStore('messages');
+                                addStore.add(msg);
+                                addTransaction.oncomplete = resolve;
+                            });
+                        }
+                        
+                        alert('История загружена. Перезагрузите страницу для отображения.');
+                        updateStatus('История загружена', '#28a745');
+                    } catch (err) {
+                        alert('Ошибка при загрузке файла');
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        // Бэкап
+        async function createBackup() {
+            const messages = await getAllMessagesFromDB();
+            const backup = {
+                username: username,
+                date: new Date().toISOString(),
+                messages: messages
+            };
+            
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `backup_${username}_${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            updateStatus('Бэкап создан', '#28a745');
+        }
+
+        // Восстановление
+        async function restoreBackup() {
+            if (!confirm('Это заменит текущую историю. Продолжить?')) return;
+
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = async function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    try {
+                        const backup = JSON.parse(e.target.result);
+                        
+                        const transaction = db.transaction(['messages'], 'readwrite');
+                        const store = transaction.objectStore('messages');
+                        store.clear();
+                        
+                        for (const msg of (backup.messages || backup)) {
+                            await new Promise(resolve => {
+                                const addTransaction = db.transaction(['messages'], 'readwrite');
+                                const addStore = addTransaction.objectStore('messages');
+                                addStore.add(msg);
+                                addTransaction.oncomplete = resolve;
+                            });
+                        }
+                        
+                        alert('История восстановлена. Перезагрузите страницу.');
+                        updateStatus('История восстановлена', '#28a745');
+                    } catch (err) {
+                        alert('Ошибка при восстановлении');
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        // Очистка чата
+        function clearChat() {
+            if (confirm('Очистить окно чата?')) {
+                document.getElementById('chat-display').innerHTML = '';
+            }
+        }
+
+        // Вспомогательные функции
+        function handleEnter(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function scrollToBottom() {
+            const display = document.getElementById('chat-display');
+            display.scrollTop = display.scrollHeight;
+        }
+
+        function updateStatus(text, color) {
+            const status = document.getElementById('status-bar');
+            if (status) {
+                status.textContent = text;
+                status.style.color = color;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Обработка закрытия
+        window.addEventListener('beforeunload', () => {
+            if (username && client) {
+                sendSystemMessage(`${username} покинул чат`);
+                client.end();
+            }
+        });
+    </script>
+</body>
+</html>
